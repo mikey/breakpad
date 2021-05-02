@@ -84,7 +84,7 @@
 // containing core registers, while they use 'user_regs_struct' on other
 // architectures. This file-local typedef simplifies the source code.
 typedef user_regs user_regs_struct;
-#elif defined (__mips__)
+#elif defined (__mips__) || defined(__PPC64__)
 // This file-local typedef simplifies the source code.
 typedef gregset_t user_regs_struct;
 #endif
@@ -308,7 +308,7 @@ struct CrashedProcess {
 
   struct Thread {
     pid_t tid;
-#if defined(__mips__)
+#if defined(__mips__) || defined(__PPC64__)
     mcontext_t mcontext;
 #else
     user_regs_struct regs;
@@ -535,6 +535,35 @@ ParseThreadRegisters(CrashedProcess::Thread* thread,
   thread->mcontext.fpc_eir = rawregs->float_save.fir;
 #endif
 }
+#elif defined(__PPC64__)
+static void
+ParseThreadRegisters(CrashedProcess::Thread* thread,
+                     const MinidumpMemoryRange& range) {
+  const MDRawContextPPC64* rawregs = range.GetData<MDRawContextPPC64>(0);
+
+  for (int i = 0; i < MD_CONTEXT_PPC64_GPR_COUNT; ++i)
+          thread->mcontext.gp_regs[i + PT_R0] = rawregs->gpr[i];
+
+  thread->mcontext.gp_regs[PT_NIP] = rawregs->srr0;
+  thread->mcontext.gp_regs[PT_MSR] = rawregs->srr1;
+  thread->mcontext.gp_regs[PT_CCR] = rawregs->cr;
+  thread->mcontext.gp_regs[PT_XER] = rawregs->xer;
+  thread->mcontext.gp_regs[PT_LNK] = rawregs->lr;
+  thread->mcontext.gp_regs[PT_CTR] = rawregs->ctr;
+
+  for (int i = 0; i < MD_FLOATINGSAVEAREA_PPC_FPR_COUNT; ++i)
+    thread->mcontext.fp_regs[i] = rawregs->float_save.fpregs[i];
+  thread->mcontext.gp_regs[PT_FPSCR - PT_FPR0] = rawregs->float_save.fpscr;
+
+/*    FIXME do vector
+  for (int i = 0; i < MD_VECTORSAVEAREA_PPC_VR_COUNT ; ++i)
+    out->vector_save.save_vr[i] = v_regs[i];
+  out->vector_save.save_vscr = mcontext.v_regs[PT_VSCR - PT_VR0]
+  out->vrsave = mcontext.v_regs[PT_VRSAVE - PT_VR0];
+*/
+
+  
+}
 #else
 #error "This code has not been ported to your platform yet"
 #endif
@@ -623,6 +652,12 @@ ParseSystemInfo(const Options& options, CrashedProcess* crashinfo,
 # else
 #  error "This mips ABI is currently not supported (n32)"
 # endif
+#elif defined(__PPC64__)
+  if (sysinfo->processor_architecture != MD_CPU_ARCHITECTURE_PPC) {
+    fprintf(stderr,
+            "This version of minidump-2-core only supports PPC (64bit).\n");
+    exit(1);
+  }
 #else
 #error "This code has not been ported to your platform yet"
 #endif
@@ -927,6 +962,8 @@ WriteThread(const Options& options, const CrashedProcess::Thread& thread,
   pr.pr_pid = thread.tid;
 #if defined(__mips__)
   memcpy(&pr.pr_reg, &thread.mcontext.gregs, sizeof(user_regs_struct));
+#elif defined(__PPC64__)
+  memcpy(&pr.pr_reg, &thread.mcontext.gp_regs, sizeof(thread.mcontext.gp_regs));
 #else
   memcpy(&pr.pr_reg, &thread.regs, sizeof(user_regs_struct));
 #endif

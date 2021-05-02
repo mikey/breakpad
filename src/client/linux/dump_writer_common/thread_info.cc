@@ -270,6 +270,37 @@ void ThreadInfo::FillCPUContext(RawContextCPU* out) const {
   out->float_save.fir = mcontext.fpc_eir;
 #endif
 }
+#elif defined(__PPC64__)
+
+uintptr_t ThreadInfo::GetInstructionPointer() const {
+  return mcontext.gp_regs[PT_R1];
+}
+
+void ThreadInfo::FillCPUContext(RawContextCPU* out) const {
+	for (int i = 0; i < MD_CONTEXT_PPC64_GPR_COUNT; ++i)
+		out->gpr[i] = mcontext.gp_regs[i + PT_R0];
+
+	out->srr0   = mcontext.gp_regs[PT_NIP];
+	out->srr1   = mcontext.gp_regs[PT_MSR];
+	out->cr     = mcontext.gp_regs[PT_CCR];
+	out->xer    = mcontext.gp_regs[PT_XER];
+	out->lr     = mcontext.gp_regs[PT_LNK];
+	out->ctr    = mcontext.gp_regs[PT_CTR];
+
+	for (int i = 0; i < MD_FLOATINGSAVEAREA_PPC_FPR_COUNT; ++i)
+		out->float_save.fpregs[i] = mcontext.fp_regs[i];
+	out->float_save.fpscr = mcontext.gp_regs[PT_FPSCR - PT_FPR0];
+
+/*  	FIXME do vector
+	for (int i = 0; i < MD_VECTORSAVEAREA_PPC_VR_COUNT ; ++i)
+		out->vector_save.save_vr[i] = v_regs[i];
+	out->vector_save.save_vscr = mcontext.v_regs[PT_VSCR - PT_VR0]
+	out->vrsave = mcontext.v_regs[PT_VRSAVE - PT_VR0];
+*/
+
+}
+#else
+#error "This code has not been ported to your platform yet."
 #endif  // __mips__
 
 void ThreadInfo::GetGeneralPurposeRegisters(void** gp_regs, size_t* size) {
@@ -279,6 +310,11 @@ void ThreadInfo::GetGeneralPurposeRegisters(void** gp_regs, size_t* size) {
     *gp_regs = mcontext.gregs;
   if (size)
     *size = sizeof(mcontext.gregs);
+#elif defined(__PPC64__)
+  if (gp_regs)
+    *gp_regs = mcontext.gp_regs;
+  if (size)
+    *size = sizeof(mcontext.gp_regs);
 #else
   if (gp_regs)
     *gp_regs = &regs;
@@ -294,6 +330,11 @@ void ThreadInfo::GetFloatingPointRegisters(void** fp_regs, size_t* size) {
     *fp_regs = &mcontext.fpregs;
   if (size)
     *size = sizeof(mcontext.fpregs);
+#elif defined(__PPC64__)
+  if (fp_regs)
+    *fp_regs = &mcontext.fp_regs;
+  if (size)
+    *size = sizeof(mcontext.fp_regs);
 #else
   if (fp_regs)
     *fp_regs = &fpregs;

@@ -254,6 +254,43 @@ void UContextReader::FillCPUContext(RawContextCPU* out, const ucontext_t* uc) {
   out->float_save.fir = uc->uc_mcontext.fpc_eir;  // Unused.
 #endif
 }
+#elif defined(__PPC64__)
+
+uintptr_t UContextReader::GetStackPointer(const ucontext_t* uc) {
+  return uc->uc_mcontext.gp_regs[PT_R1];
+}
+
+uintptr_t UContextReader::GetInstructionPointer(const ucontext_t* uc) {
+  return uc->uc_mcontext.gp_regs[PT_NIP];
+}
+void UContextReader::FillCPUContext(RawContextCPU* out, const ucontext_t* uc) {
+
+	for (int i = 0; i < MD_CONTEXT_PPC64_GPR_COUNT; ++i)
+		out->gpr[i] = uc->uc_mcontext.gp_regs[i + PT_R0];
+
+	out->srr0   = uc->uc_mcontext.gp_regs[PT_NIP];
+	out->srr1   = uc->uc_mcontext.gp_regs[PT_MSR];
+	out->cr     = uc->uc_mcontext.gp_regs[PT_CCR];
+	out->xer    = uc->uc_mcontext.gp_regs[PT_XER];
+	out->lr     = uc->uc_mcontext.gp_regs[PT_LNK];
+	out->ctr    = uc->uc_mcontext.gp_regs[PT_CTR];
+
+	for (int i = 0; i < MD_FLOATINGSAVEAREA_PPC_FPR_COUNT; ++i)
+		out->float_save.fpregs[i] = uc->uc_mcontext.fp_regs[i];
+	out->float_save.fpscr = uc->uc_mcontext.gp_regs[PT_FPSCR - PT_FPR0];
+
+/*  	FIXME do vector
+	for (int i = 0; i < MD_VECTORSAVEAREA_PPC_VR_COUNT ; ++i)
+		out->vector_save.save_vr[i] = v_regs[i];
+	out->vector_save.save_vscr = uc->uc_mcontext.v_regs[PT_VSCR - PT_VR0]
+	out->vrsave = uc->uc_mcontext.v_regs[PT_VRSAVE - PT_VR0];
+*/
+  return;
+}
+
+#else
+#error "Unsupported CPU architecture"
+
 #endif
 
 }  // namespace google_breakpad

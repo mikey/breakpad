@@ -329,6 +329,8 @@ class MicrodumpWriter {
     const char kArch[] = "x86_64";
 #elif defined(__i386__)
     const char kArch[] = "x86";
+#elif defined(__PPC64__)
+    const char kArch[] = "ppc64le";
 #elif defined(__mips__)
 # if _MIPS_SIM == _ABIO32
     const char kArch[] = "mips";
@@ -409,7 +411,7 @@ class MicrodumpWriter {
   void DumpCPUState() {
     RawContextCPU cpu;
     my_memset(&cpu, 0, sizeof(RawContextCPU));
-#if !defined(__ARM_EABI__) && !defined(__mips__)
+#if !defined(__ARM_EABI__) && !defined(__mips__) && !defined(__PPC64__)
     UContextReader::FillCPUContext(&cpu, ucontext_, float_state_);
 #else
     UContextReader::FillCPUContext(&cpu, ucontext_);

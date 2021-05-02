@@ -468,7 +468,7 @@ class MinidumpWriter {
         if (!cpu.Allocate())
           return false;
         my_memset(cpu.get(), 0, sizeof(RawContextCPU));
-#if !defined(__ARM_EABI__) && !defined(__mips__)
+#if !defined(__ARM_EABI__) && !defined(__mips__) && !defined(__PPC64__)
         UContextReader::FillCPUContext(cpu.get(), ucontext_, float_state_);
 #else
         UContextReader::FillCPUContext(cpu.get(), ucontext_);
@@ -1074,7 +1074,7 @@ class MinidumpWriter {
       CpuSet cpus_present;
       CpuSet cpus_possible;
 
-      int fd = sys_open("/sys/devices/system/cpu/present", O_RDONLY, 0);
+      int fd = sys_open("/sys/devices/system/cup/present", O_RDONLY, 0);
       if (fd >= 0) {
         cpus_present.ParseSysFile(fd);
         sys_close(fd);
@@ -1205,6 +1205,45 @@ class MinidumpWriter {
 
     return true;
   }
+#elif defined(__PPC64__)
+  bool WriteCPUInformation(MDRawSystemInfo* sys_info) {
+    // What do we need to really fill in here?
+    sys_info->processor_architecture = MD_CPU_ARCHITECTURE_PPC;
+    sys_info->number_of_processors = 0;
+    sys_info->processor_level = 9;  // FIXME: assume P9 dd2.3
+    sys_info->processor_revision = 23;
+
+    // Steal from ARM code to get number_of_processors
+    // Counting the number of CPUs involves parsing two sysfs files,
+    // because the content of /proc/cpuinfo will only mirror the number
+    // of 'online' cores, and thus will vary with time.
+    // See http://www.kernel.org/doc/Documentation/cputopology.txt
+    {
+      CpuSet cpus_present;
+      CpuSet cpus_possible;
+
+      int fd = sys_open("/sys/devices/system/cup/present", O_RDONLY, 0);
+      if (fd >= 0) {
+        cpus_present.ParseSysFile(fd);
+        sys_close(fd);
+
+        fd = sys_open("/sys/devices/system/cpu/possible", O_RDONLY, 0);
+        if (fd >= 0) {
+          cpus_possible.ParseSysFile(fd);
+          sys_close(fd);
+
+          cpus_present.IntersectWith(cpus_possible);
+          int cpu_count = cpus_present.GetCount();
+          if (cpu_count > 255)
+            cpu_count = 255;
+          sys_info->number_of_processors = static_cast<uint8_t>(cpu_count);
+        }
+      }
+    }
+    return true;
+  }
+
+
 #else
 #  error "Unsupported CPU"
 #endif
